@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 命运织布机 - 双语版</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "lucide-react": "https://esm.sh/lucide-react@0.263.1"
+      }
+    }
+    </script>
+    
+    <style>
+        @keyframes twinkle { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 1; transform: scale(1.2); } }
+        .animate-twinkle { animation: twinkle 3s infinite ease-in-out; }
+        .animate-fade-in-down { animation: fadeInDown 1s ease-out; }
+        .animate-fade-in-up { animation: fadeInUp 0.5s ease-out; }
+        .animate-fade-in { animation: fadeIn 0.8s ease-out; }
+        @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+        ::-webkit-scrollbar-thumb { background: rgba(139, 92, 246, 0.3); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(139, 92, 246, 0.5); }
+    </style>
+</head>
+<body class="bg-[#0f0c29] text-amber-100 font-sans selection:bg-purple-500/30">
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useRef } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { Sparkles, Moon, Sun, RefreshCw, Star, Fingerprint, Loader2, AlertCircle, LayoutGrid, Layers, GitBranch, Globe } from 'lucide-react';
+
+        // --- Configuration ---
+        
+        // [重要] 请在此处填入您的 Kimi (Moonshot) API Key
+        const moonshotApiKey = ""; 
+
+        const API_BASE_URL = "https://api.moonshot.cn/v1"; 
+        const MODEL_NAME = "moonshot-v1-8k";
+
+        // --- Translations ---
+        const TRANSLATIONS = {
+            zh: {
+                title: "AI 命运织布机",
+                subtitle: "Oracle of the Digital Void",
+                intro_label: "向虚空低语你的困惑...",
+                placeholder: "例如：我最近的职业发展如何？",
+                start_btn: "开启法阵",
+                select_spread: "1. 选择牌阵",
+                your_question: "2. 你的困惑",
+                shuffling_click: "点击抽取",
+                analyzing: "正在连接虚空...",
+                analyzing_desc: "解读命运的纹理",
+                result_question: "您的问题",
+                spread_label: "牌阵显现",
+                interpretation_label: "命运解析",
+                again_btn: "再次占卜",
+                error_apikey: "API Key 未配置，切换至离线模式",
+                error_auth: "API Key 验证失败 (401)。请检查 Key 是否正确。",
+                error_network: "网络连接错误，请检查网络设置。",
+                offline_mode: "离线模式",
+                dev_hint: "开发者提示: 请在代码中配置 API Key。",
+                spreads: {
+                    single: { name: "单张指引", desc: "每日运势 / 简单是非" },
+                    trinity: { name: "圣三角", desc: "时间流 / 事情走向" },
+                    four_elements: { name: "关系/四要素", desc: "人际关系 / 事情全貌" },
+                    choice: { name: "二选一", desc: "抉择 / 两个方向" }
+                },
+                positions: {
+                    single: ['核心指引'],
+                    trinity: ['过去/原因', '现在/阻碍', '未来/结果'],
+                    four_elements: ['现状/自我', '对方/挑战', '建议/核心', '结果/未来'],
+                    choice: ['当前状态', '选择A的发展', '选择B的发展', '选择A的结果', '选择B的结果']
+                },
+                upright: "正位",
+                reversed: "逆位",
+                pos_prefix: "位置"
+            },
+            en: {
+                title: "AI Fate Weaver",
+                subtitle: "Oracle of the Digital Void",
+                intro_label: "Whisper your query to the void...",
+                placeholder: "e.g., How will my career develop?",
+                start_btn: "Open the Circle",
+                select_spread: "1. Select Spread",
+                your_question: "2. Your Query",
+                shuffling_click: "Tap to Draw",
+                analyzing: "Connecting to the Void...",
+                analyzing_desc: "Reading the texture of fate",
+                result_question: "Your Query",
+                spread_label: "The Spread",
+                interpretation_label: "Interpretation",
+                again_btn: "Divinate Again",
+                error_apikey: "API Key missing, switching to Offline Mode",
+                error_auth: "API Key Unauthorized (401). Check your Key.",
+                error_network: "Network Error. Check settings.",
+                offline_mode: "Offline Mode",
+                dev_hint: "Dev Hint: Configure API Key in code.",
+                spreads: {
+                    single: { name: "Single Card", desc: "Daily Guidance / Yes or No" },
+                    trinity: { name: "Trinity", desc: "Time Flow / Situation Path" },
+                    four_elements: { name: "Four Elements", desc: "Relationships / Overview" },
+                    choice: { name: "Two Choices", desc: "Dilemma / Two Paths" }
+                },
+                positions: {
+                    single: ['Core Guidance'],
+                    trinity: ['Past/Cause', 'Present/Obstacle', 'Future/Outcome'],
+                    four_elements: ['Current/Self', 'Other/Challenge', 'Advice/Core', 'Result/Future'],
+                    choice: ['Current State', 'Path A Growth', 'Path B Growth', 'Path A Result', 'Path B Result']
+                },
+                upright: "Upright",
+                reversed: "Reversed",
+                pos_prefix: "Position"
+            }
+        };
+
+        // --- Data Definitions (Updated with English) ---
+
+        const SPREADS_CONFIG = [
+            { id: 'single', count: 1, icon: <Star className="w-4 h-4" /> },
+            { id: 'trinity', count: 3, icon: <Layers className="w-4 h-4" /> },
+            { id: 'four_elements', count: 4, icon: <LayoutGrid className="w-4 h-4" /> },
+            { id: 'choice', count: 5, icon: <GitBranch className="w-4 h-4" /> }
+        ];
+
+        const MAJOR_ARCANA = [
+            { id: 0, name: "愚者", nameEn: "The Fool", up: "新的开始、冒险、纯真", upEn: "New beginnings, innocence", rev: "鲁莽、冒险带来的风险", revEn: "Recklessness, risk-taking", icon: "🤡" },
+            { id: 1, name: "魔术师", nameEn: "The Magician", up: "创造力、技能、意志力", upEn: "Manifestation, resourcefulness", rev: "操纵、才能未发挥", revEn: "Manipulation, poor planning", icon: "🪄" },
+            { id: 2, name: "女祭司", nameEn: "The High Priestess", up: "直觉、神秘、潜意识", upEn: "Intuition, sacred knowledge", rev: "压抑情感、隐藏的敌人", revEn: "Secrets, disconnected from intuition", icon: "📜" },
+            { id: 3, name: "女皇", nameEn: "The Empress", up: "丰饶、母性、自然", upEn: "Femininity, nature, nurturing", rev: "依赖、创造力受阻", revEn: "Creative block, dependence", icon: "👑" },
+            { id: 4, name: "皇帝", nameEn: "The Emperor", up: "权威、结构、稳固", upEn: "Authority, structure", rev: "暴政、僵化、缺乏纪律", revEn: "Domination, excessive control", icon: "🏰" },
+            { id: 5, name: "教皇", nameEn: "The Hierophant", up: "传统、精神指引", upEn: "Spiritual wisdom, tradition", rev: "挑战传统、盲从", revEn: "Personal beliefs, freedom", icon: "⛪" },
+            { id: 6, name: "恋人", nameEn: "The Lovers", up: "爱、和谐、价值观", upEn: "Love, harmony, relationships", rev: "不和谐、失衡", revEn: "Disharmony, imbalance", icon: "💕" },
+            { id: 7, name: "战车", nameEn: "The Chariot", up: "胜利、意志力", upEn: "Control, willpower, success", rev: "失控、攻击性", revEn: "Lack of control, aggression", icon: "🛡️" },
+            { id: 8, name: "力量", nameEn: "Strength", up: "勇气、耐心、同情心", upEn: "Strength, courage, persuasion", rev: "软弱、自我怀疑", revEn: "Inner weakness, self-doubt", icon: "🦁" },
+            { id: 9, name: "隐士", nameEn: "The Hermit", up: "内省、孤独、寻求真理", upEn: "Soul-searching, introspection", rev: "孤立、迷失方向", revEn: "Isolation, withdrawal", icon: "🕯️" },
+            { id: 10, name: "命运之轮", nameEn: "Wheel of Fortune", up: "好运、转折点", upEn: "Good luck, karma, destiny", rev: "厄运、抵抗变化", revEn: "Bad luck, resistance to change", icon: "🎡" },
+            { id: 11, name: "正义", nameEn: "Justice", up: "公正、真理、因果", upEn: "Justice, fairness, truth", rev: "不公、不诚实", revEn: "Unfairness, dishonesty", icon: "⚖️" },
+            { id: 12, name: "倒吊人", nameEn: "The Hanged Man", up: "牺牲、新视角、等待", upEn: "Pause, surrender, letting go", rev: "停滞、无谓的牺牲", revEn: "Delays, resistance, stalling", icon: "🤸" },
+            { id: 13, name: "死神", nameEn: "Death", up: "结束、转变、重生", upEn: "Endings, change, transformation", rev: "抗拒改变、停滞", revEn: "Resistance to change, stagnation", icon: "💀" },
+            { id: 14, name: "节制", nameEn: "Temperance", up: "平衡、适度、耐心", upEn: "Balance, moderation, patience", rev: "失衡、过度", revEn: "Imbalance, excess", icon: "🏺" },
+            { id: 15, name: "恶魔", nameEn: "The Devil", up: "束缚、物质主义", upEn: "Shadow self, attachment, addiction", rev: "打破束缚、重获自由", revEn: "Releasing limiting beliefs, detachment", icon: "😈" },
+            { id: 16, name: "高塔", nameEn: "The Tower", up: "突变、觉醒、破坏", upEn: "Sudden change, upheaval, chaos", rev: "避免灾难、恐惧改变", revEn: "Fear of change, averting disaster", icon: "⚡" },
+            { id: 17, name: "星星", nameEn: "The Star", up: "希望、灵感、宁静", upEn: "Hope, faith, purpose", rev: "绝望、缺乏信心", revEn: "Lack of faith, despair", icon: "⭐" },
+            { id: 18, name: "月亮", nameEn: "The Moon", up: "幻觉、恐惧、潜意识", upEn: "Illusion, fear, subconscious", rev: "释放恐惧、清晰", revEn: "Release of fear, confusion", icon: "🌙" },
+            { id: 19, name: "太阳", nameEn: "The Sun", up: "快乐、成功、活力", upEn: "Positivity, fun, warmth", rev: "暂时的消沉", revEn: "Feeling down, overly optimistic", icon: "☀️" },
+            { id: 20, name: "审判", nameEn: "Judgement", up: "复活、觉醒、召唤", upEn: "Judgement, rebirth, inner calling", rev: "自我怀疑、拒绝召唤", revEn: "Self-doubt, ignoring the call", icon: "🎺" },
+            { id: 21, name: "世界", nameEn: "The World", up: "完成、整合、成就", upEn: "Completion, integration, accomplishment", rev: "未完成、缺乏闭环", revEn: "Incompletion, lack of closure", icon: "🌍" },
+        ];
+
+        const SUITS = [
+            { key: 'Wands', name: '权杖', nameEn: 'Wands', icon: '🔥' },
+            { key: 'Cups', name: '圣杯', nameEn: 'Cups', icon: '🍷' },
+            { key: 'Swords', name: '宝剑', nameEn: 'Swords', icon: '🗡️' },
+            { key: 'Pentacles', name: '星币', nameEn: 'Pentacles', icon: '🪙' }
+        ];
+
+        const RANKS = [
+            { rank: 1, name: '首牌', nameEn: 'Ace', icon: '1️⃣', up: '新机会', upEn: 'New opportunity', rev: '错失良机', revEn: 'Missed chance' },
+            { rank: 2, name: '2', nameEn: 'Two', icon: '2️⃣', up: '平衡', upEn: 'Balance', rev: '不平衡', revEn: 'Imbalance' },
+            { rank: 3, name: '3', nameEn: 'Three', icon: '3️⃣', up: '合作', upEn: 'Collaboration', rev: '延误', revEn: 'Delays' },
+            { rank: 4, name: '4', nameEn: 'Four', icon: '4️⃣', up: '稳定', upEn: 'Stability', rev: '停滞', revEn: 'Stagnation' },
+            { rank: 5, name: '5', nameEn: 'Five', icon: '5️⃣', up: '冲突', upEn: 'Conflict', rev: '解决冲突', revEn: 'Resolution' },
+            { rank: 6, name: '6', nameEn: 'Six', icon: '6️⃣', up: '和谐', upEn: 'Harmony', rev: '沉溺过去', revEn: 'Stuck in past' },
+            { rank: 7, name: '7', nameEn: 'Seven', icon: '7️⃣', up: '选择', upEn: 'Choices', rev: '犹豫', revEn: 'Indecision' },
+            { rank: 8, name: '8', nameEn: 'Eight', icon: '8️⃣', up: '掌握', upEn: 'Mastery', rev: '缺乏重点', revEn: 'Lack of focus' },
+            { rank: 9, name: '9', nameEn: 'Nine', icon: '9️⃣', up: '满足', upEn: 'Fulfillment', rev: '不满足', revEn: 'Dissatisfaction' },
+            { rank: 10, name: '10', nameEn: 'Ten', icon: '🔟', up: '圆满', upEn: 'Completion', rev: '未完成', revEn: 'Broken family' },
+            { rank: 11, name: '侍从', nameEn: 'Page', icon: '👶', up: '新消息', upEn: 'New ideas', rev: '坏消息', revEn: 'Bad news' },
+            { rank: 12, name: '骑士', nameEn: 'Knight', icon: '🐎', up: '行动', upEn: 'Action', rev: '鲁莽', revEn: 'Recklessness' },
+            { rank: 13, name: '皇后', nameEn: 'Queen', icon: '👸', up: '关怀', upEn: 'Nurturing', rev: '依赖', revEn: 'Dependence' },
+            { rank: 14, name: '国王', nameEn: 'King', icon: '🤴', up: '掌控', upEn: 'Authority', rev: '暴政', revEn: 'Tyranny' },
+        ];
+
+        const generateMinorArcana = () => {
+            let deck = [];
+            let idCounter = 22;
+            SUITS.forEach(suit => {
+                RANKS.forEach(rank => {
+                    deck.push({
+                        id: idCounter++,
+                        name: `${suit.name}${rank.name}`,
+                        nameEn: `${rank.nameEn} of ${suit.nameEn}`,
+                        up: `${rank.up}`,
+                        upEn: `${rank.upEn}`,
+                        rev: `${rank.rev}`,
+                        revEn: `${rank.revEn}`,
+                        icon: rank.rank > 10 ? `${suit.icon}${rank.icon}` : suit.icon, 
+                        isMajor: false
+                    });
+                });
+            });
+            return deck;
+        };
+
+        const TAROT_DECK = [...MAJOR_ARCANA, ...generateMinorArcana()];
+
+        // --- Logic Helper ---
+        const generateOfflineReading = (question, cards, spreadId, lang) => {
+            const t = TRANSLATIONS[lang];
+            const spreadConfig = t.spreads[spreadId];
+            const positions = t.positions[spreadId];
+            
+            let reading = lang === 'zh' 
+                ? `(离线模式)\n针对问题：“${question}”，牌阵【${spreadConfig.name}】的解读如下：\n\n`
+                : `(Offline Mode)\nFor question: "${question}", Spread [${spreadConfig.name}] Reading:\n\n`;
+            
+            cards.forEach((c, i) => {
+                const posName = positions[i] || `${t.pos_prefix} ${i+1}`;
+                const cardName = lang === 'zh' ? c.card.name : c.card.nameEn;
+                const posDesc = c.isUpright ? t.upright : t.reversed;
+                const meaning = lang === 'zh' 
+                    ? (c.isUpright ? c.card.up : c.card.rev)
+                    : (c.isUpright ? c.card.upEn : c.card.revEn);
+                
+                reading += `${i+1}. ${posName}: 【${cardName}】(${posDesc})\n${meaning}\n\n`;
+            });
+            
+            reading += lang === 'zh' 
+                ? "综合指引：请结合这些牌意，跟随您的直觉行动。"
+                : "Guidance: Combine these meanings and follow your intuition.";
+            
+            return reading;
+        };
+
+        function TarotApp() {
+            const [lang, setLang] = useState('zh'); // 'zh' or 'en'
+            const t = TRANSLATIONS[lang];
+            
+            const [gameState, setGameState] = useState('intro');
+            const [question, setQuestion] = useState('');
+            const [selectedSpreadId, setSelectedSpreadId] = useState('trinity'); 
+            
+            const [currentDeck, setCurrentDeck] = useState(TAROT_DECK);
+            const [displayCardIndex, setDisplayCardIndex] = useState(0);
+            const [drawnCards, setDrawnCards] = useState([]);
+            const [interpretation, setInterpretation] = useState('');
+            const [errorMsg, setErrorMsg] = useState('');
+            
+            const shuffleIntervalRef = useRef(null);
+
+            const getSpreadConfig = (id) => {
+                const staticConf = SPREADS_CONFIG.find(s => s.id === id);
+                const textConf = t.spreads[id];
+                return { ...staticConf, ...textConf };
+            };
+
+            const currentSpread = getSpreadConfig(selectedSpreadId);
+
+            useEffect(() => {
+                if (gameState === 'shuffling' && drawnCards.length < currentSpread.count && currentDeck.length > 0) {
+                    shuffleIntervalRef.current = setInterval(() => {
+                        setDisplayCardIndex(Math.floor(Math.random() * currentDeck.length));
+                    }, 83);
+                } else {
+                    clearInterval(shuffleIntervalRef.current);
+                }
+                return () => clearInterval(shuffleIntervalRef.current);
+            }, [gameState, drawnCards.length, currentDeck.length, currentSpread.count]);
+
+            const callLLM = async (q, cards, spreadId) => {
+                const spreadConf = getSpreadConfig(spreadId);
+                const posList = t.positions[spreadId];
+
+                if (!moonshotApiKey) {
+                    setErrorMsg(t.error_apikey);
+                    return generateOfflineReading(q, cards, spreadId, lang);
+                }
+
+                const cardDescriptions = cards.map((c, i) => {
+                    const posName = posList[i] || `${t.pos_prefix} ${i+1}`;
+                    const name = lang === 'zh' ? c.card.name : c.card.nameEn;
+                    const orientation = c.isUpright ? t.upright : t.reversed;
+                    const meaning = lang === 'zh' 
+                        ? (c.isUpright ? c.card.up : c.card.rev)
+                        : (c.isUpright ? c.card.upEn : c.card.revEn);
+                    return `${i+1}. [${posName}]: ${name} (${orientation}) - ${meaning}`;
+                }).join('\n');
+
+                let systemPrompt = "You are a mysterious Tarot reader.";
+                let userPrompt = "";
+
+                if (lang === 'zh') {
+                    systemPrompt = "你是一位神秘的塔罗牌占卜大师。";
+                    userPrompt = `你是一位神秘的塔罗占卜师。
+使用牌阵：【${spreadConf.name}】。
+用户问题："${q}"。
+抽牌结果：
+${cardDescriptions}
+
+请进行深度解读。语气神秘优雅，带有文学色彩。
+请针对每个位置的牌意进行分析，最后给出综合建议。
+不要使用Markdown格式，直接输出纯文本。请用中文回答。`;
+                } else {
+                    systemPrompt = "You are a mysterious and insightful Tarot reader.";
+                    userPrompt = `You are a mysterious Tarot reader.
+Spread used: [${spreadConf.name}].
+User Question: "${q}".
+Cards Drawn:
+${cardDescriptions}
+
+Please provide a deep interpretation. Tone should be mysterious, elegant, and literary.
+Analyze the meaning of each card in its position, and provide a comprehensive conclusion.
+Do not use Markdown formatting, output plain text only. Please answer in English.`;
+                }
+
+                const payload = {
+                    model: MODEL_NAME,
+                    messages: [
+                        { role: "system", content: systemPrompt },
+                        { role: "user", content: userPrompt }
+                    ],
+                    temperature: 0.7
+                };
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/chat/completions`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${moonshotApiKey}`
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.status === 401) {
+                        setErrorMsg(t.error_auth);
+                        return generateOfflineReading(q, cards, spreadId, lang);
+                    }
+                    
+                    if (!response.ok) {
+                        const errText = await response.text();
+                        setErrorMsg(`API Error: ${response.status}`);
+                        return generateOfflineReading(q, cards, spreadId, lang);
+                    }
+
+                    const data = await response.json();
+                    let text = data.choices?.[0]?.message?.content;
+                    if (text) {
+                        setErrorMsg(""); 
+                        return text.replace(/\*\*/g, '').replace(/###/g, '').replace(/#/g, '');
+                    }
+                    throw new Error("No content");
+                } catch (error) {
+                    console.error(error);
+                    setErrorMsg(t.error_network);
+                    return generateOfflineReading(q, cards, spreadId, lang);
+                }
+            };
+
+            const handleScreenClick = async () => {
+                if (gameState !== 'shuffling' || currentDeck.length === 0) return;
+
+                const currentCard = currentDeck[displayCardIndex];
+                if (!currentCard) return;
+
+                const p = Math.floor(Math.random() * 101);
+                const isUpright = (Math.floor(Math.random() * 101)) < p;
+
+                const newCard = { card: currentCard, pValue: p, isUpright: isUpright, id: Date.now() };
+                const newDrawnCards = [...drawnCards, newCard];
+                
+                setDrawnCards(newDrawnCards);
+                setCurrentDeck(currentDeck.filter(c => c.id !== currentCard.id));
+                setDisplayCardIndex(0);
+
+                if (newDrawnCards.length === currentSpread.count) {
+                    setGameState('analyzing');
+                    const result = await callLLM(question, newDrawnCards, selectedSpreadId);
+                    setInterpretation(result);
+                    setGameState('result');
+                }
+            };
+
+            const resetGame = () => {
+                setQuestion('');
+                setDrawnCards([]);
+                setInterpretation('');
+                setCurrentDeck(TAROT_DECK);
+                setGameState('intro');
+                setErrorMsg('');
+            };
+
+            const displayCard = currentDeck[displayCardIndex] || TAROT_DECK[0];
+
+            return (
+                <div className="min-h-screen w-full overflow-hidden relative">
+                    {/* Background */}
+                    <div className="fixed inset-0 z-0 pointer-events-none bg-gradient-to-br from-[#0f0c29] via-[#302b63] to-[#24243e]">
+                        <div className="absolute top-0 left-0 w-full h-full opacity-30 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-900 via-transparent to-transparent animate-pulse"></div>
+                        {[...Array(20)].map((_, i) => (
+                        <div key={i} className="absolute rounded-full bg-white animate-twinkle" style={{top: `${Math.random()*100}%`, left: `${Math.random()*100}%`, width: `${Math.random()*3}px`, height: `${Math.random()*3}px`, animationDelay: `${Math.random()*5}s`}} />))}
+                    </div>
+
+                    {/* Language Toggle */}
+                    <div className="absolute top-4 right-4 z-50">
+                        <button 
+                            onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur text-sm text-purple-200 transition-all"
+                        >
+                            <Globe className="w-4 h-4" />
+                            <span>{lang === 'zh' ? 'English' : '中文'}</span>
+                        </button>
+                    </div>
+
+                    {/* Main Game UI */}
+                    <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-4">
+                        {/* Header */}
+                        <header className="mb-6 text-center animate-fade-in-down">
+                            <div className="flex items-center justify-center gap-2 mb-2">
+                                <Moon className="w-6 h-6 text-purple-400" />
+                                <h1 className="text-3xl sm:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-purple-200 to-amber-200 tracking-wider drop-shadow-[0_0_10px_rgba(255,215,0,0.5)]">
+                                    {t.title}
+                                </h1>
+                                <Sun className="w-6 h-6 text-amber-400" />
+                            </div>
+                            <p className="text-purple-300 text-sm tracking-widest uppercase opacity-80">{t.subtitle}</p>
+                        </header>
+
+                        {/* Intro */}
+                        {gameState === 'intro' && (
+                            <div className="w-full max-w-md p-6 bg-black/40 backdrop-blur-md border border-purple-500/30 rounded-2xl shadow-[0_0_30px_rgba(88,28,135,0.4)] transform transition-all hover:scale-[1.01]">
+                                {!moonshotApiKey && (
+                                    <div className="mb-4 p-2 bg-yellow-900/40 border border-yellow-600/50 rounded flex gap-2 items-center text-xs text-yellow-200">
+                                        <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                                        <span>{t.dev_hint}</span>
+                                    </div>
+                                )}
+                                
+                                <div className="mb-6">
+                                    <label className="block text-sm text-purple-200 mb-2 font-bold tracking-wide">{t.select_spread}</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {SPREADS_CONFIG.map(conf => {
+                                            const spreadInfo = t.spreads[conf.id];
+                                            return (
+                                                <button
+                                                    key={conf.id}
+                                                    onClick={() => setSelectedSpreadId(conf.id)}
+                                                    className={`p-3 rounded-lg border text-left transition-all ${selectedSpreadId === conf.id ? 'bg-purple-900/60 border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.2)]' : 'bg-slate-900/40 border-white/10 hover:bg-slate-800'}`}
+                                                >
+                                                    <div className="flex items-center gap-2 text-amber-100 font-bold text-sm mb-1">
+                                                        {conf.icon} {spreadInfo.name}
+                                                    </div>
+                                                    <div className="text-[10px] text-purple-300 opacity-80 leading-tight">{spreadInfo.desc}</div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                <div className="mb-8">
+                                    <label className="block text-sm text-purple-200 mb-2 font-bold tracking-wide">{t.your_question}</label>
+                                    <input type="text" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder={t.placeholder} className="w-full bg-slate-900/80 border-b-2 border-purple-600 text-center text-amber-100 p-3 focus:outline-none focus:border-amber-400 transition-colors placeholder-slate-600 rounded-t-md" />
+                                </div>
+
+                                <button onClick={() => { if(!question.trim()) return; setGameState('shuffling'); }} disabled={!question} className={`w-full py-4 px-6 rounded-lg font-bold text-lg tracking-widest flex items-center justify-center gap-2 transition-all duration-300 ${question ? 'bg-gradient-to-r from-purple-800 to-indigo-900 hover:from-purple-700 hover:to-indigo-800 text-amber-200 shadow-[0_0_15px_rgba(168,85,247,0.5)] border border-purple-500/50' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}>
+                                    <Sparkles className="w-5 h-5" /> {t.start_btn}
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Shuffling */}
+                        {gameState === 'shuffling' && (
+                            <div className="flex flex-col items-center w-full max-w-4xl">
+                                <div onClick={handleScreenClick} className="relative group cursor-pointer w-64 h-96 sm:w-72 sm:h-[28rem] perspective-1000 mb-12 select-none touch-manipulation">
+                                    <div className="absolute -inset-4 bg-purple-600/20 rounded-full blur-xl animate-pulse"></div>
+                                    <div className="relative w-full h-full bg-slate-900 border-2 border-amber-500/70 rounded-xl flex flex-col items-center justify-center shadow-[0_0_30px_rgba(251,191,36,0.2)] transform transition-transform group-active:scale-95 overflow-hidden">
+                                        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-amber-500 to-transparent"></div>
+                                        <div className="border border-amber-500/30 m-2 absolute inset-0 rounded-lg"></div>
+                                        <div className="z-10 text-center animate-pulse">
+                                            <div className="text-6xl mb-4 filter drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">{displayCard.icon}</div>
+                                            <h2 className="text-2xl font-serif text-amber-100 tracking-wider px-2">{lang === 'zh' ? displayCard.name : displayCard.nameEn}</h2>
+                                            <p className="text-purple-300 text-xs mt-2 uppercase tracking-[0.2em]">{displayCard.isMajor === false ? (lang === 'zh'?'小阿卡纳':'Minor Arcana') : (lang === 'zh'?'大阿卡纳':'Major Arcana')}</p>
+                                        </div>
+                                        <div className="absolute bottom-6 text-xs text-amber-400/60 animate-bounce">{t.shuffling_click} ({drawnCards.length + 1}/{currentSpread.count})</div>
+                                    </div>
+                                </div>
+                                
+                                <div className="flex flex-wrap justify-center gap-3 w-full max-w-4xl px-2">
+                                    {Array.from({ length: currentSpread.count }).map((_, i) => {
+                                        const cardData = drawnCards[i];
+                                        return (
+                                            <div key={i} className={`relative rounded-lg border border-white/10 flex flex-col items-center justify-center bg-black/20 backdrop-blur-sm transition-all duration-500 w-20 h-28 sm:w-24 sm:h-36
+                                                ${cardData ? 'shadow-[0_0_15px_rgba(251,191,36,0.2)] border-amber-500/40' : 'opacity-30 border-dashed'}
+                                            `}>
+                                                <div className="absolute -top-2 text-[9px] bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600 text-slate-300 z-20 whitespace-nowrap max-w-full overflow-hidden text-ellipsis">
+                                                    {t.positions[selectedSpreadId][i] || `#${i+1}`}
+                                                </div>
+                                                
+                                                {cardData ? (
+                                                    <div className={`text-center p-1 animate-fade-in-up w-full h-full flex flex-col items-center justify-center ${!cardData.isUpright ? 'rotate-180' : ''}`}>
+                                                        <div className="text-2xl mb-1">{cardData.card.icon}</div>
+                                                        <div className="text-[8px] sm:text-[10px] text-amber-100 leading-tight line-clamp-2 scale-90">{lang === 'zh' ? cardData.card.name : cardData.card.nameEn}</div>
+                                                    </div>
+                                                ) : (<div className="text-white/20 text-xl font-serif">?</div>)}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Analyzing */}
+                        {gameState === 'analyzing' && (
+                            <div className="flex flex-col items-center justify-center animate-fade-in">
+                                <div className="relative"><div className="absolute -inset-4 bg-purple-500/30 rounded-full blur-xl animate-pulse"></div><Loader2 className="w-16 h-16 text-amber-200 animate-spin relative z-10" /></div>
+                                <p className="mt-8 text-xl text-purple-200 font-serif tracking-widest animate-pulse">{t.analyzing}</p>
+                                <p className="mt-2 text-sm text-slate-400">{t.analyzing_desc}</p>
+                            </div>
+                        )}
+
+                        {/* Result */}
+                        {gameState === 'result' && (
+                            <div className="w-full max-w-5xl animate-fade-in bg-slate-900/80 backdrop-blur-xl border border-purple-500/30 rounded-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row h-[80vh] md:h-[700px]">
+                                {/* Left: Card Summary */}
+                                <div className="md:w-1/3 bg-black/30 p-4 border-b md:border-b-0 md:border-r border-white/10 overflow-y-auto">
+                                    <div className="mb-4">
+                                        <div className="text-xs text-purple-400 uppercase tracking-widest mb-1">{t.result_question}</div>
+                                        <div className="text-amber-100 font-serif italic">"{question}"</div>
+                                        <div className="mt-2 text-[10px] bg-purple-900/40 inline-block px-2 py-1 rounded text-purple-200 border border-purple-500/20">{currentSpread.name}</div>
+                                    </div>
+                                    
+                                    <div className="space-y-3">
+                                        {drawnCards.map((data, idx) => (
+                                            <div key={idx} className="flex items-center gap-3 p-2 rounded hover:bg-white/5 transition-colors">
+                                                <div className={`w-10 h-14 rounded border border-amber-500/30 flex items-center justify-center bg-indigo-950 text-lg flex-shrink-0 ${!data.isUpright ? 'rotate-180' : ''}`}>{data.card.icon}</div>
+                                                <div className="min-w-0">
+                                                    <div className="text-[10px] text-slate-400 mb-0.5">{t.positions[selectedSpreadId][idx]}</div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-bold text-amber-200 text-sm truncate">{lang === 'zh' ? data.card.name : data.card.nameEn}</span>
+                                                    </div>
+                                                    <span className={`text-[9px] px-1.5 rounded-full inline-block mt-1 ${data.isUpright ? 'bg-green-900/40 text-green-300' : 'bg-red-900/40 text-red-300'}`}>{data.isUpright ? t.upright : t.reversed}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Right: AI Interpretation */}
+                                <div className="md:w-2/3 p-6 flex flex-col h-full relative">
+                                    <h4 className="text-purple-400 text-sm tracking-widest uppercase mb-4 flex items-center gap-2 flex-shrink-0">
+                                        <Fingerprint className="w-4 h-4" /> {t.interpretation_label}
+                                    </h4>
+                                    
+                                    {errorMsg && (
+                                        <div className="mb-4 p-3 bg-red-900/30 border border-red-500/50 rounded text-xs text-red-200 flex gap-2 flex-shrink-0">
+                                            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                                            <div>{errorMsg}</div>
+                                        </div>
+                                    )}
+
+                                    <div className="flex-grow overflow-y-auto pr-2">
+                                        <div className="prose prose-invert prose-p:text-slate-300 prose-strong:text-amber-200 text-sm leading-relaxed whitespace-pre-line">
+                                            {interpretation}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="pt-4 mt-4 border-t border-white/10 flex-shrink-0">
+                                        <button onClick={resetGame} className="py-3 w-full border border-purple-500/50 rounded hover:bg-purple-900/30 text-purple-200 transition-colors flex items-center justify-center gap-2 text-sm uppercase tracking-wider">
+                                            <RefreshCw className="w-4 h-4" /> {t.again_btn}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<TarotApp />);
+    </script>
+</body>
+</html>
